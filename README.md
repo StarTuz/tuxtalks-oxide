@@ -30,12 +30,17 @@ User config lives at `~/.config/tuxtalks-oxide/config.json`. Keys read by the Ru
 |---|---|
 | `PLAYER` | Default player (`jriver`, `strawberry`, `elisa`, `mpris`) |
 | `JRIVER_IP`, `JRIVER_PORT`, `ACCESS_KEY` | JRiver MCWS |
+| `JRIVER_BINARY` | JRiver executable for autostart (default `mediacenter35`) |
 | `MPRIS_SERVICE` | e.g. `org.mpris.MediaPlayer2.vlc` |
 | `STRAWBERRY_DB_PATH` | Strawberry's SQLite db |
 | `LIBRARY_PATH` | Local music directory |
 | `WAKE_WORD` | Voice-mode wake word |
 
 Override via env (`JRIVER_IP=...`) or point at a different file with `TUXTALKS_OXIDE_CONFIG=/path/to/config.json`.
+
+### JRiver autostart
+
+If JRiver isn't running when you issue a command, the CLI will spawn `JRIVER_BINARY` and wait up to 20 seconds for it to come up (matching the Python app's behavior). Set `TUXTALKS_NO_AUTOSTART=1` to disable autostart — useful for CI, scripts, and anywhere a GUI shouldn't be launched.
 
 ### TTS backend
 

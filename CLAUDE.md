@@ -77,7 +77,9 @@ Single JSON file with Python-compatible keys (same field names so values can be 
 - Explicit: `TUXTALKS_OXIDE_CONFIG` or `TUXTALKS_CONFIG` env var
 - Library DB default: `~/.local/share/tuxtalks-oxide/library.db`
 
-Keys Rust reads: `PLAYER`, `JRIVER_IP`, `JRIVER_PORT`, `ACCESS_KEY`, `MPRIS_SERVICE`, `STRAWBERRY_DB_PATH`, `LIBRARY_PATH`, `WAKE_WORD`. Env equivalents: same names, or `JRIVER_`-prefixed.
+Keys Rust reads: `PLAYER`, `JRIVER_IP`, `JRIVER_PORT`, `ACCESS_KEY`, `JRIVER_BINARY`, `MPRIS_SERVICE`, `STRAWBERRY_DB_PATH`, `LIBRARY_PATH`, `WAKE_WORD`. Env equivalents: same names, or `JRIVER_`-prefixed.
+
+**JRiver autostart** (Python parity with `players/jriver.py::health_check`): when any JRiver call hits `connection refused`, the CLI spawns `JRIVER_BINARY` (default `mediacenter35`) and polls `/Alive` for up to 20 s. Disable with `TUXTALKS_NO_AUTOSTART=1` (also auto-enabled by the JRiver integration tests so `wiremock` flakes can't spawn a real GUI).
 
 **Never** read `~/.config/tuxtalks/` (that's the Python app's config dir; leave it alone).
 

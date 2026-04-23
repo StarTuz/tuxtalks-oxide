@@ -24,6 +24,10 @@ pub struct PlayerConfig {
     pub jriver_ip: String,
     pub jriver_port: u16,
     pub jriver_access_key: String,
+    /// JRiver executable name used by autostart. Default `mediacenter35` matches
+    /// Python `players/jriver.py::health_check`. Override with `JRIVER_BINARY`
+    /// when you bump JRiver versions (e.g. `mediacenter36`).
+    pub jriver_binary: String,
     pub strawberry_db_path: String,
     pub elisa_db_path: String,
     pub library_path: String,
@@ -41,6 +45,7 @@ impl PlayerConfig {
             jriver_ip: "localhost".to_string(),
             jriver_port: 52199,
             jriver_access_key: String::new(),
+            jriver_binary: "mediacenter35".to_string(),
             strawberry_db_path: format!("{home}/.local/share/strawberry/strawberry/strawberry.db"),
             elisa_db_path: format!("{home}/.local/share/elisa/elisaDatabase.db"),
             library_path: format!("{home}/Music"),
@@ -129,6 +134,9 @@ fn merge_from_json(c: &mut PlayerConfig, v: &Value) {
     if let Some(s) = v.get("ACCESS_KEY").and_then(Value::as_str) {
         c.jriver_access_key = s.to_string();
     }
+    if let Some(s) = v.get("JRIVER_BINARY").and_then(Value::as_str) {
+        c.jriver_binary = s.to_string();
+    }
     if let Some(s) = v.get("STRAWBERRY_DB_PATH").and_then(Value::as_str) {
         c.strawberry_db_path = s.to_string();
     }
@@ -171,6 +179,9 @@ fn apply_python_style_env(c: &mut PlayerConfig) {
     }
     if let Some(v) = env_for_python_key("ACCESS_KEY") {
         c.jriver_access_key = v;
+    }
+    if let Some(v) = env_for_python_key("JRIVER_BINARY") {
+        c.jriver_binary = v;
     }
     if let Some(v) = env_for_python_key("STRAWBERRY_DB_PATH") {
         c.strawberry_db_path = v;
@@ -233,6 +244,8 @@ mod tests {
         "JRIVER_JRIVER_PORT",
         "ACCESS_KEY",
         "JRIVER_ACCESS_KEY",
+        "JRIVER_BINARY",
+        "JRIVER_JRIVER_BINARY",
         "STRAWBERRY_DB_PATH",
         "JRIVER_STRAWBERRY_DB_PATH",
         "LIBRARY_PATH",
@@ -297,6 +310,7 @@ mod tests {
         assert_eq!(c.player, "jriver");
         assert_eq!(c.jriver_ip, "localhost");
         assert_eq!(c.jriver_port, 52199);
+        assert_eq!(c.jriver_binary, "mediacenter35");
         assert_eq!(c.wake_word, "Alice");
         assert_eq!(
             c.mpris_service.as_deref(),

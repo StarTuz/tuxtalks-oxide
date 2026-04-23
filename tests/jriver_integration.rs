@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use tuxtalks_oxide::config::{PlayerConfig, PlayerContext};
 use tuxtalks_oxide::players::jriver::JRiverPlayer;
 use tuxtalks_oxide::utils::speaker::Speaker;
@@ -6,7 +6,15 @@ use tuxtalks_oxide::{MediaPlayer, NowPlaying, SearchResult, Track};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+/// Ensures `send_command` will not try to `Popen("mediacenter35")` if a mock
+/// flakes under load. Without this, a dropped wiremock port mid-test could
+/// spawn a real GUI on developer workstations.
+static DISABLE_AUTOSTART: Once = Once::new();
+
 fn test_ctx(key: &str) -> Arc<PlayerContext> {
+    DISABLE_AUTOSTART.call_once(|| {
+        std::env::set_var("TUXTALKS_NO_AUTOSTART", "1");
+    });
     let mut config = PlayerConfig::load();
     config.jriver_access_key = key.to_string();
     let (speaker, _handle) = Speaker::new();

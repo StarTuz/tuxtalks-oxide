@@ -11,6 +11,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Write as _;
+use std::io::Write as _;
 use std::sync::Arc;
 use strsim;
 use tokio::sync::Mutex;
@@ -61,6 +62,19 @@ pub struct JRiverPlayer {
     base_url: String,
     circuit_breaker: CircuitBreaker,
     cache: Mutex<HashMap<String, Vec<String>>>,
+}
+
+/// Whether `send_command` / `health_check` are allowed to spawn the JRiver
+/// binary when a connection fails. Disable with `TUXTALKS_NO_AUTOSTART=1`
+/// for CI, headless tests, or scripts that must not spawn GUIs.
+fn autostart_enabled() -> bool {
+    !matches!(
+        std::env::var("TUXTALKS_NO_AUTOSTART")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("1" | "true" | "yes" | "on")
+    )
 }
 
 /// Builds a human-readable, causally-complete error message for a failing
@@ -132,6 +146,7 @@ impl JRiverPlayer {
 
         // Retry logic for connection robustness (Parity with Python)
         let mut last_err = None;
+        let mut autostart_tried = false;
         for attempt in 1..=3 {
             if self.circuit_breaker.is_open() {
                 return Err(PlayerError::Communication(
@@ -163,10 +178,29 @@ impl JRiverPlayer {
                 }
                 Err(e) => {
                     self.circuit_breaker.record_failure();
-                    last_err = Some(PlayerError::Communication(describe_reqwest_error(
-                        &self.base_url,
-                        &e,
-                    )));
+                    let msg = describe_reqwest_error(&self.base_url, &e);
+
+                    // Python parity: when JRiver is unreachable, try to launch it
+                    // and keep retrying once it comes up. See `health_check` in
+                    // `players/jriver.py`.
+                    if e.is_connect() && !autostart_tried && autostart_enabled() {
+                        autostart_tried = true;
+                        tracing::info!(
+                            "JRiver unreachable at {}; attempting autostart via `{}`…",
+                            self.base_url,
+                            self.ctx.config.jriver_binary
+                        );
+                        if self.ensure_running().await {
+                            // Skip the 1s cooldown — JRiver just reported Alive.
+                            continue;
+                        }
+                        last_err = Some(PlayerError::Communication(format!(
+                            "{msg} [autostart of `{}` failed or timed out]",
+                            self.ctx.config.jriver_binary
+                        )));
+                        break;
+                    }
+                    last_err = Some(PlayerError::Communication(msg));
                 }
             }
             if attempt < 3 {
@@ -175,6 +209,77 @@ impl JRiverPlayer {
         }
 
         Err(last_err.unwrap_or_else(|| PlayerError::Communication("Retries exhausted".to_string())))
+    }
+
+    /// Quick `GET /Alive` probe. Returns `true` on HTTP 2xx within 2s.
+    async fn alive(&self) -> bool {
+        match self
+            .client
+            .get(format!("{}Alive", self.base_url))
+            .timeout(Duration::from_secs(2))
+            .send()
+            .await
+        {
+            Ok(res) => res.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
+    /// If JRiver isn't answering, try to launch the configured binary and
+    /// poll `Alive` for up to 20s (500ms interval). Mirrors Python
+    /// `players/jriver.py::health_check` launch-and-wait loop.
+    ///
+    /// Returns `true` if JRiver is ready by the end. `false` if the binary
+    /// couldn't be spawned (missing from PATH) or didn't become ready in time.
+    /// Respects `TUXTALKS_NO_AUTOSTART=1` at the caller.
+    async fn ensure_running(&self) -> bool {
+        if self.alive().await {
+            return true;
+        }
+
+        let binary = &self.ctx.config.jriver_binary;
+        // User-visible progress on stderr (stdout stays clean for --json callers).
+        // Mirrors Python `players/jriver.py::health_check` print output.
+        eprintln!("⚠️  JRiver not responding. Launching `{binary}`...");
+
+        // Fire-and-forget: drop the Child so init reaps it when JRiver outlives us.
+        // JRiver is a long-running GUI app; we intentionally do not wait().
+        match std::process::Command::new(binary)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
+            Ok(_child) => tracing::info!("launched `{binary}`; polling Alive…"),
+            Err(e) => {
+                eprintln!(
+                    "❌ Could not launch `{binary}`: {e}. Install JRiver or set \
+                     JRIVER_BINARY to the correct executable name."
+                );
+                return false;
+            }
+        }
+
+        eprint!("⏳ Waiting for JRiver to start");
+        let _ = std::io::stderr().flush();
+        // Python parity: 20s deadline, 500ms polling interval.
+        for i in 0u32..40 {
+            sleep(Duration::from_millis(500)).await;
+            if self.alive().await {
+                eprintln!(
+                    "\n✅ JRiver is ready (took {:.1}s).",
+                    f64::from(i + 1) * 0.5
+                );
+                self.circuit_breaker.record_success();
+                return true;
+            }
+            if i.is_multiple_of(2) {
+                eprint!(".");
+                let _ = std::io::stderr().flush();
+            }
+        }
+        eprintln!("\n⚠️  JRiver launched but didn't become ready in 20s. Commands may fail.");
+        false
     }
 
     async fn get_library_values(&self, field: &str) -> Result<Vec<String>> {
@@ -278,64 +383,20 @@ impl MediaPlayer for JRiverPlayer {
         if self.circuit_breaker.is_open() {
             return false;
         }
-
-        let is_alive = match self
-            .client
-            .get(format!("{}Alive", self.base_url))
-            .timeout(Duration::from_secs(2))
-            .send()
-            .await
-        {
-            Ok(res) => res.status().is_success(),
-            Err(_) => false,
-        };
-
-        if is_alive {
+        if self.alive().await {
             self.circuit_breaker.record_success();
             return true;
         }
-
-        // ⚠️ JRiver is not running. Launching... (Parity with Python)
-        tracing::warn!("JRiver not responding. Attempting to launch...");
-        let spawn_res = std::process::Command::new("mediacenter35")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
-
-        if spawn_res.is_err() {
-            tracing::error!("Could not launch 'mediacenter35'.");
+        if !autostart_enabled() {
             self.circuit_breaker.record_failure();
             return false;
         }
-
-        tracing::info!("Waiting for JRiver to start...");
-        // Poll for JRiver to become ready (up to 20 seconds) - Python Parity
-        let max_wait = 40; // 40 * 500ms = 20s
-        for _ in 0..max_wait {
-            sleep(Duration::from_millis(500)).await;
-
-            // Check if Alive endpoint is reachable
-            let is_ready = match self
-                .client
-                .get(format!("{}Alive", self.base_url))
-                .timeout(Duration::from_secs(1))
-                .send()
-                .await
-            {
-                Ok(res) => res.status().is_success(),
-                Err(_) => false,
-            };
-
-            if is_ready {
-                tracing::info!("✅ JRiver launched and ready.");
-                self.circuit_breaker.record_success();
-                return true;
-            }
+        tracing::warn!("JRiver not responding. Attempting to launch...");
+        let ok = self.ensure_running().await;
+        if !ok {
+            self.circuit_breaker.record_failure();
         }
-
-        tracing::error!("⚠️ JRiver launched but didn't become ready in 20s.");
-        self.circuit_breaker.record_failure();
-        false
+        ok
     }
 
     async fn play(&self) -> Result<()> {
