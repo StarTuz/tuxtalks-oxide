@@ -1,0 +1,21 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local-only config for dev work (Rust reads ./tuxtalks-oxide.config.json if present)
+/tuxtalks-oxide.config.json
+
+# Local logs / temp
+*.log
+/tmp/

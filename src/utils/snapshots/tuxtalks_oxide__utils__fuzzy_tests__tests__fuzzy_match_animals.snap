@@ -1,0 +1,10 @@
+---
+source: src/utils/fuzzy_tests.rs
+expression: match_3
+---
+[
+    MatchResult {
+        text: "Animals",
+        score: 0.9714285714285714,
+    },
+]

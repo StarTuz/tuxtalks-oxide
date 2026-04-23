@@ -1,0 +1,10 @@
+---
+source: src/utils/fuzzy_tests.rs
+expression: match_2
+---
+[
+    MatchResult {
+        text: "The Wall",
+        score: 0.9,
+    },
+]

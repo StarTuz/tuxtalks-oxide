@@ -1,0 +1,10 @@
+---
+source: src/utils/fuzzy_tests.rs
+expression: match_1
+---
+[
+    MatchResult {
+        text: "Dark Side of the Moon",
+        score: 0.9,
+    },
+]
