@@ -216,7 +216,7 @@ impl LocalLibrary {
             .prepare(&sql)
             .map_err(|e| crate::PlayerError::Internal(e.to_string()))?;
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(params.into_iter()), |row| {
+            .query_map(rusqlite::params_from_iter(params), |row| {
                 let path_bytes: Vec<u8> = row.get(0)?;
                 Ok(TrackItem {
                     path: PathBuf::from(std::ffi::OsString::from_vec(path_bytes)),

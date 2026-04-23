@@ -8,6 +8,22 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use zbus::{connection, interface};
 
+/// Opt-in gate for tests that need a live D-Bus session **and** a running
+/// MPRIS-compatible media player on the same bus. CI has neither, so these
+/// tests short-circuit unless `TUXTALKS_OXIDE_DBUS_TESTS=1` is set.
+///
+/// Run locally with:
+/// `TUXTALKS_OXIDE_DBUS_TESTS=1 cargo nextest run --all-features -E 'test(::integration_dbus)'`
+fn dbus_tests_enabled() -> bool {
+    matches!(
+        std::env::var("TUXTALKS_OXIDE_DBUS_TESTS")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("1" | "true" | "yes" | "on")
+    )
+}
+
 /// Isolated Oxide config so tests never depend on `~/.config/tuxtalks-oxide/config.json`.
 fn test_config_mpris_only() -> tempfile::NamedTempFile {
     let mut f = tempfile::NamedTempFile::new().expect("temp config");
@@ -54,6 +70,13 @@ impl MockSpeechService {
 
 #[tokio::test]
 async fn test_cli_listen_flow() {
+    if !dbus_tests_enabled() {
+        eprintln!(
+            "skipping test_cli_listen_flow: set TUXTALKS_OXIDE_DBUS_TESTS=1 and ensure \
+             a D-Bus session + MPRIS player (e.g. vlc) are available."
+        );
+        return;
+    }
     // Unique service name to avoid conflicts
     let unique_suffix = std::process::id();
     // D-Bus name segments must not start with a digit; prefix the PID.
@@ -107,6 +130,13 @@ async fn test_cli_listen_flow() {
 
 #[tokio::test]
 async fn test_cli_daemon_flow() {
+    if !dbus_tests_enabled() {
+        eprintln!(
+            "skipping test_cli_daemon_flow: set TUXTALKS_OXIDE_DBUS_TESTS=1 and ensure \
+             a D-Bus session + MPRIS player (e.g. vlc) are available."
+        );
+        return;
+    }
     // Unique service name
     let unique_suffix = std::process::id();
     let service_name = format!("org.speech.Service.DaemonTest.p{unique_suffix}");
