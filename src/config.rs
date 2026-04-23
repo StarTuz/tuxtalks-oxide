@@ -24,9 +24,9 @@ pub struct PlayerConfig {
     pub jriver_ip: String,
     pub jriver_port: u16,
     pub jriver_access_key: String,
-    /// JRiver executable name used by autostart. Default `mediacenter35` matches
+    /// `JRiver` executable name used by autostart. Default `mediacenter35` matches
     /// Python `players/jriver.py::health_check`. Override with `JRIVER_BINARY`
-    /// when you bump JRiver versions (e.g. `mediacenter36`).
+    /// when you bump `JRiver` versions (e.g. `mediacenter36`).
     pub jriver_binary: String,
     pub strawberry_db_path: String,
     pub elisa_db_path: String,

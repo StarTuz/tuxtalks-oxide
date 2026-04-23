@@ -64,7 +64,7 @@ pub struct JRiverPlayer {
     cache: Mutex<HashMap<String, Vec<String>>>,
 }
 
-/// Whether `send_command` / `health_check` are allowed to spawn the JRiver
+/// Whether `send_command` / `health_check` are allowed to spawn the `JRiver`
 /// binary when a connection fails. Disable with `TUXTALKS_NO_AUTOSTART=1`
 /// for CI, headless tests, or scripts that must not spawn GUIs.
 fn autostart_enabled() -> bool {
@@ -225,12 +225,12 @@ impl JRiverPlayer {
         }
     }
 
-    /// If JRiver isn't answering, try to launch the configured binary and
+    /// If `JRiver` isn't answering, try to launch the configured binary and
     /// poll `Alive` for up to 20s (500ms interval). Mirrors Python
     /// `players/jriver.py::health_check` launch-and-wait loop.
     ///
-    /// Returns `true` if JRiver is ready by the end. `false` if the binary
-    /// couldn't be spawned (missing from PATH) or didn't become ready in time.
+    /// Returns `true` if `JRiver` is ready by the end. `false` if the binary
+    /// couldn't be spawned (missing from `PATH`) or didn't become ready in time.
     /// Respects `TUXTALKS_NO_AUTOSTART=1` at the caller.
     async fn ensure_running(&self) -> bool {
         if self.alive().await {

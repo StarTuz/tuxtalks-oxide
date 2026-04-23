@@ -172,7 +172,12 @@ async fn speak_via_speechd(slot: &mut Option<Connection>, msg: &str) -> Result<(
 async fn speak_via_spd_say(msg: &str) -> Result<(), ()> {
     // `--wait` so the subprocess doesn't return before synth, keeping ordering
     // intact when multiple announcements stack up.
-    match Command::new("spd-say").arg("--wait").arg(msg).status().await {
+    match Command::new("spd-say")
+        .arg("--wait")
+        .arg(msg)
+        .status()
+        .await
+    {
         Ok(status) if status.success() => Ok(()),
         Ok(status) => {
             tracing::debug!("tts: spd-say exited with {status}");
