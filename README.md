@@ -22,6 +22,29 @@ cargo run -- status              # smoke-test
 
 Requires a recent stable Rust toolchain (pinned via `rust-toolchain.toml`).
 
+## Development & CI
+
+GitHub Actions runs three jobs on `main` and PRs: **Check & Lint** (`cargo fmt` + `cargo clippy` with `clippy::pedantic`), **Test** (`cargo nextest run --all-features`), and **Security Audit** (`cargo audit`). Compile caching uses [Swatinem/rust-cache](https://github.com/Swatinem/rust-cache); we intentionally do **not** wrap `rustc` with `sccache`’s GitHub Actions backend, because when artifact cache is unavailable it can fail every compiler invocation (including `rustc -vV` during `rustup`).
+
+Before opening a PR, run `make ci` locally — it matches what CI enforces.
+
+### Environment variables for tests and scripts
+
+| Variable | Effect |
+|---|---|
+| `TUXTALKS_NO_AUTOSTART` | When `1` / `true` / `yes` / `on`, JRiver autostart is disabled (JRiver integration tests set this so a mock HTTP flake cannot launch a real GUI). |
+| `TUXTALKS_OXIDE_DBUS_TESTS` | When `1` / `true` / `yes` / `on`, runs the voice D-Bus integration tests in `tests/integration_dbus.rs` end-to-end (requires a session bus and a live MPRIS player such as VLC). **Unset in CI** — those tests short-circuit. |
+
+Example (local workstation with VLC exposing MPRIS):
+
+```bash
+TUXTALKS_OXIDE_DBUS_TESTS=1 cargo nextest run --all-features -E 'test(::integration_dbus)'
+```
+
+### Security audit
+
+`make audit` runs [`cargo-audit`](https://github.com/rustsec/rustsec) against [RustSec advisory-db](https://github.com/RustSec/advisory-db). **Vulnerabilities** fail the job; **warnings** (e.g. unmaintained crates, informational advisories) may still print but do not fail CI. After changing dependencies, run `cargo audit` and address any reported vulnerabilities (often a `cargo update -p …` to a patched version).
+
 ## Configuration
 
 User config lives at `~/.config/tuxtalks-oxide/config.json`. Keys read by the Rust app:

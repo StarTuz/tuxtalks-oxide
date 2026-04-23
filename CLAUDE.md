@@ -100,6 +100,13 @@ Keys Rust reads: `PLAYER`, `JRIVER_IP`, `JRIVER_PORT`, `ACCESS_KEY`, `JRIVER_BIN
 - Integration tests for HTTP players use `wiremock`; D-Bus tests are voice-gated.
 - Errors surface the real cause chain — when wrapping `reqwest::Error`, walk `source()` so "connection refused" isn't swallowed (see `describe_reqwest_error` in `players/jriver.rs`).
 
+### CI and test env (must-know)
+
+- **CI** (`.github/workflows/ci.yml`): `cargo fmt --check`, `cargo clippy … -D clippy::pedantic`, `cargo nextest run --all-features`, `cargo audit`. No `RUSTC_WRAPPER=sccache` — GHA cache outages can brick every `rustc` call; use `rust-cache` instead.
+- **`TUXTALKS_NO_AUTOSTART`**: JRiver `tests/jriver_integration.rs` set this once (via `std::sync::Once`) so a wiremock failure never spawns `mediacenter35`.
+- **`TUXTALKS_OXIDE_DBUS_TESTS`**: `tests/integration_dbus.rs` (`listen` / `daemon` flows) **return early** unless this is `1`/`true`/`yes`/`on`. They need a real session D-Bus and an MPRIS player (e.g. VLC); CI has neither. Local: `TUXTALKS_OXIDE_DBUS_TESTS=1 cargo nextest run --all-features -E 'test(::integration_dbus)'`.
+- **`cargo audit`**: vulnerabilities must be fixed (e.g. bump transitive crates via `cargo update -p …`); warnings alone do not fail the job.
+
 ## When porting a feature from Python
 
 1. Read the Python function(s) at `~/Code/tuxtalks/`. Note XML/JSON shapes, error cases, user-visible strings.
